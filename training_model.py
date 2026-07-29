@@ -113,7 +113,7 @@ for horizon in FORECAST_HORIZONS:
         # MODEL
         # =================================================
         model = RandomForestRegressor(
-            n_estimators=500,
+            n_estimators=100,
             max_depth=20,
             min_samples_leaf=2,
             random_state=42,

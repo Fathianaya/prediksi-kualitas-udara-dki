@@ -28,7 +28,7 @@ for polutan in df["Polutan"].unique():
 
     plt.plot(
         data["Horizon"],
-        data["RMSE"],
+        data["MAE"],
         marker='o',
         linewidth=2,
         markersize=5,
@@ -37,14 +37,14 @@ for polutan in df["Polutan"].unique():
 
 # Judul
 plt.title(
-    "Perbandingan Nilai Root Mean Squared Error (RMSE)\nModel Random Forest pada Setiap Horizon Prediksi",
+    "Perbandingan Nilai MAE\nModel Random Forest pada Setiap Horizon Prediksi",
     fontsize=14,
     weight='bold'
 )
 
 # Label sumbu
 plt.xlabel("Horizon Prediksi", fontsize=12)
-plt.ylabel("Nilai RMSE", fontsize=12)
+plt.ylabel("Nilai MAE", fontsize=12)
 
 # Tick
 plt.xticks(range(1,8))
@@ -63,7 +63,7 @@ plt.tight_layout()
 
 # Simpan gambar kualitas tinggi
 plt.savefig(
-    "grafik_rmse_random_forest.png",
+    "grafik_mae_random_forest.png",
     dpi=300,
     bbox_inches="tight"
 )
