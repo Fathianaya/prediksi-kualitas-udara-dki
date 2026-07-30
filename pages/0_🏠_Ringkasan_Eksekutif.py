@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
+import re
 
 from air_quality import (
     load_raw_data,
@@ -25,15 +26,30 @@ st.set_page_config(
 # Prediksi) selalu konsisten dan cukup diubah dari satu tempat.
 apply_theme()
 
+# ─────────────────────────────────────────────
+# SKALA TIPOGRAFI TERPUSAT
+# ─────────────────────────────────────────────
+# Sebelumnya tiap kartu punya ukuran font sendiri (11px, 12px, 13px, 1.6rem,
+# 1.15rem, dst. ditulis ulang di banyak tempat) sehingga hasilnya tidak
+# konsisten antar bagian. Sekarang semua kartu di halaman ini memakai skala
+# yang sama dari dict FS di bawah.
+FS = {
+    "eyebrow": "11px",    # label kecil huruf kapital di atas kartu
+    "value_lg": "1.5rem", # angka/nilai utama KPI (nilai pendek)
+    "value_sm": "1.05rem",# angka/nilai utama KPI (nilai panjang)
+    "heading": "14px",    # judul di dalam kartu
+    "body": "13px",       # teks isi kartu
+    "small": "12px",      # caption / teks sekunder
+    "badge": "11px",      # teks pada badge kategori
+}
+
+
 # ── Helper: hapus indentasi awal tiap baris pada HTML ──
 # st.markdown() menafsirkan baris yang diawali 4+ spasi sebagai code block
 # (aturan Markdown standar). Karena HTML kita ditulis dengan indentasi rapi
 # mengikuti gaya kode Python, itu bisa membuat tag-tag HTML tampil sebagai
 # teks mentah alih-alih dirender. Fungsi ini menghapus indentasi tersebut
 # sebelum HTML dikirim ke st.markdown().
-import re
-
-
 def _flatten_html(html: str) -> str:
     return re.sub(r"^[ \t]+", "", html, flags=re.MULTILINE).strip()
 
@@ -98,26 +114,35 @@ kategori_dominan = ringkasan_home["kategori"].mode()[0] if not ringkasan_home["k
 k1, k2, k3, k4 = st.columns(4)
 
 kpi_data = [
-    (k1, f"Rata-rata ISPU per {tanggal_terkini}", f"{rata_ispu:.0f}", "#1E9FDB", "📊"),
-    (k2, "Kategori Dominan", KATEGORI_DISPLAY.get(kategori_dominan, kategori_dominan), "#E8A020", "🏷️"),
-    (k3, "Stasiun Paling Tercemar", stasiun_terburuk["stasiun"].split(" ", 1)[0], "#E05C40", "⚠️"),
-    (k4, "Stasiun Paling Bersih", stasiun_terbaik["stasiun"].split(" ", 1)[0], "#1DB874", "✅"),
+    (k1, "Rata-rata ISPU", f"{rata_ispu:.0f}", "#1E9FDB", "📊", tanggal_terkini),
+    (k2, "Kategori Dominan", KATEGORI_DISPLAY.get(kategori_dominan, kategori_dominan), "#E8A020", "🏷️", None),
+    (k3, "Stasiun Paling Tercemar", stasiun_terburuk["stasiun"].split(" ", 1)[0], "#E05C40", "⚠️", None),
+    (k4, "Stasiun Paling Bersih", stasiun_terbaik["stasiun"].split(" ", 1)[0], "#1DB874", "✅", None),
 ]
 
-for col, label, value, accent, icon in kpi_data:
+# Label ditulis dalam kalimat biasa (bukan huruf kapital semua/uppercase)
+# supaya lebih enak dibaca. Tanggal, kalau ada, dipisah jadi caption kecil
+# di bawah nilai — bukan digabung ke label yang bikin teks membungkus
+# jadi 3 baris di kartu sempit.
+for col, label, value, accent, icon, subcaption in kpi_data:
     with col:
-        font_size = "1.6rem" if len(str(value)) <= 8 else "1.15rem"
+        font_size = FS["value_lg"] if len(str(value)) <= 8 else FS["value_sm"]
+        subcaption_html = (
+            f"""<p style="font-size:{FS['small']};color:#9AAAC0;margin:6px 0 0;">{subcaption}</p>"""
+            if subcaption else ""
+        )
         content = f"""
-            <p style="font-size:11px;color:#9AAAC0;margin:8px 0 6px;
-                      text-transform:uppercase;letter-spacing:0.05em;">
-                {icon} {label}
+            <p style="font-size:{FS['eyebrow']};color:#5B6E88;margin:0 0 10px;
+                      font-weight:600;letter-spacing:0.01em;line-height:1.4;">
+                {icon}&nbsp; {label}
             </p>
             <p style="font-size:{font_size};font-weight:700;color:#1E2E42;
-                      margin:0;line-height:1.3;word-wrap:break-word;">
+                      margin:0;line-height:1.25;word-wrap:break-word;">
                 {value}
             </p>
+            {subcaption_html}
         """
-        st.markdown(card(content, accent, height="100%"), unsafe_allow_html=True)
+        st.markdown(card(content, accent, height="110px"), unsafe_allow_html=True)
 
 with st.expander("📋 Apa arti kategori ISPU ini?"):
     ref = pd.DataFrame(
@@ -207,7 +232,7 @@ with st.container(border=True):
     st.pyplot(fig, use_container_width=True)
     st.caption(caption_trend)
 
-st.markdown(f"#### Status Tiap Stasiun per {tanggal_terkini}")
+st.markdown(f"#### Status Tiap Stasiun · {tanggal_terkini}")
 
 cols_home = st.columns(len(ringkasan_home))
 
@@ -223,14 +248,16 @@ for i, (_, row) in enumerate(ringkasan_home.iterrows()):
         nama_stn = parts[1] if len(parts) > 1 else nama
 
         content = f"""
-            <p style="font-size:11px;color:#5B6E88;margin:8px 0 2px;">{kode}</p>
-            <p style="font-size:13px;font-weight:500;color:#023E61;margin:0 0 10px;line-height:1.3;">{nama_stn}</p>
-            <span style="display:inline-block;font-size:11px;font-weight:500;
+            <p style="font-size:{FS['eyebrow']};color:#5B6E88;margin:0 0 2px;
+                      font-weight:600;letter-spacing:0.02em;">{kode}</p>
+            <p style="font-size:{FS['heading']};font-weight:500;color:#023E61;
+                      margin:0 0 10px;line-height:1.3;">{nama_stn}</p>
+            <span style="display:inline-block;font-size:{FS['badge']};font-weight:500;
                          padding:3px 10px;border-radius:99px;background:{badge_bg};color:{badge_fg};">{label}</span>
         """
         st.markdown(card(content, accent, radius="12px"), unsafe_allow_html=True)
 
-# ── Insight singkat otomatis + navigasi cepat ──
+# ── Insight singkat otomatis ──
 if kategori_dominan.upper() in ["TIDAK SEHAT", "SANGAT TIDAK SEHAT", "BERBAHAYA"]:
     st.warning(
         f"⚠️ Mayoritas stasiun berada pada kategori **{KATEGORI_DISPLAY.get(kategori_dominan, kategori_dominan)}**. "
@@ -241,31 +268,6 @@ else:
         f"✅ Secara umum kualitas udara berada pada kategori **{KATEGORI_DISPLAY.get(kategori_dominan, kategori_dominan)}**. "
         f"Stasiun dengan kualitas udara terbaik saat ini adalah **{stasiun_terbaik['stasiun']}**."
     )
-
-nav1, nav2 = st.columns(2)
-with nav1:
-    st.markdown(
-        card(
-            """
-            <p style="font-size:13px;font-weight:600;color:#023E61;margin:8px 0 4px;">📊 Visualisasi Data Historis</p>
-            <p style="font-size:12px;color:#5B6E88;margin:0;">Lihat tren dan analisis data historis tiap stasiun secara lebih mendalam.</p>
-            """,
-            "#1E9FDB",
-        ),
-        unsafe_allow_html=True,
-    )
-with nav2:
-    st.markdown(
-        card(
-            """
-            <p style="font-size:13px;font-weight:600;color:#023E61;margin:8px 0 4px;">🔮 Prediksi 7 Hari</p>
-            <p style="font-size:12px;color:#5B6E88;margin:0;">Lihat proyeksi kualitas udara H+1 s/d H+7 ke depan per stasiun.</p>
-            """,
-            "#1DB874",
-        ),
-        unsafe_allow_html=True,
-    )
-st.caption("↖️ Buka halaman-halaman tersebut lewat menu di sidebar.")
 
 st.divider()
 
@@ -381,15 +383,15 @@ all_cols = cols_row1 + cols_row2
 for col, (simbol, nama, satuan, deskripsi, accent, _, _) in zip(all_cols, polutan_info):
     with col:
         content = f"""
-            <div style="display:flex;align-items:baseline;gap:8px;margin:8px 0 2px;">
+            <div style="display:flex;align-items:baseline;gap:8px;margin:0 0 2px;">
                 <span style="font-size:22px;font-weight:700;color:{accent};">{simbol}</span>
-                <span style="font-size:11px;color:#9AAAC0;text-transform:uppercase;
+                <span style="font-size:{FS['eyebrow']};color:#9AAAC0;text-transform:uppercase;
                              letter-spacing:0.04em;">{satuan}</span>
             </div>
-            <p style="font-size:13px;font-weight:600;color:#1E2E42;margin:0 0 8px;">
+            <p style="font-size:{FS['heading']};font-weight:600;color:#1E2E42;margin:0 0 8px;">
                 {nama}
             </p>
-            <p style="font-size:12px;color:#5B6E88;line-height:1.5;margin:0;">
+            <p style="font-size:{FS['small']};color:#5B6E88;line-height:1.5;margin:0;">
                 {deskripsi}
             </p>
         """
@@ -405,7 +407,7 @@ for tab, (simbol, nama, satuan, deskripsi, accent, penyebab, penanggulangan) in 
     with tab:
         st.markdown(
             _flatten_html(f"""
-            <p style="font-size:13px;color:#5B6E88;margin:4px 0 14px;">
+            <p style="font-size:{FS['body']};color:#5B6E88;margin:4px 0 14px;">
                 <span style="font-weight:700;color:{accent};">{simbol}</span> — {nama}
             </p>
             """),
@@ -420,11 +422,11 @@ for tab, (simbol, nama, satuan, deskripsi, accent, penyebab, penanggulangan) in 
                 _flatten_html(f"""
                 <div style="background:rgba(255,248,236,0.65);border-left:4px solid #E8A020;
                             border-radius:12px;padding:1rem 1.2rem;height:100%;">
-                    <p style="font-size:12px;font-weight:700;color:#BA7517;margin:0 0 8px;
+                    <p style="font-size:{FS['eyebrow']};font-weight:700;color:#BA7517;margin:0 0 8px;
                               text-transform:uppercase;letter-spacing:0.04em;">
                         ⚠️ Penyebab
                     </p>
-                    <ul style="margin:0;padding-left:1.1rem;font-size:13px;color:#1E2E42;line-height:1.5;">
+                    <ul style="margin:0;padding-left:1.1rem;font-size:{FS['body']};color:#1E2E42;line-height:1.5;">
                         {items_html}
                     </ul>
                 </div>
@@ -438,11 +440,11 @@ for tab, (simbol, nama, satuan, deskripsi, accent, penyebab, penanggulangan) in 
                 _flatten_html(f"""
                 <div style="background:rgba(93,212,160,0.18);border-left:4px solid #1DB874;
                             border-radius:12px;padding:1rem 1.2rem;height:100%;">
-                    <p style="font-size:12px;font-weight:700;color:#1DB874;margin:0 0 8px;
+                    <p style="font-size:{FS['eyebrow']};font-weight:700;color:#1DB874;margin:0 0 8px;
                               text-transform:uppercase;letter-spacing:0.04em;">
                         ✅ Cara Menanggulangi
                     </p>
-                    <ul style="margin:0;padding-left:1.1rem;font-size:13px;color:#1E2E42;line-height:1.5;">
+                    <ul style="margin:0;padding-left:1.1rem;font-size:{FS['body']};color:#1E2E42;line-height:1.5;">
                         {items_html}
                     </ul>
                 </div>
@@ -507,11 +509,11 @@ col1, col2 = st.columns([1, 2])
 with col1:
     wilayah_html = "".join(f"<li>{x}</li>" for x in info["wilayah"])
     info_content = f"""
-        <p style="font-size:15px;font-weight:700;color:#023E61;margin:8px 0 10px;">📍 {pilihan}</p>
-        <p style="font-size:11px;color:#9AAAC0;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 4px;">Lokasi</p>
-        <p style="font-size:13px;color:#1E2E42;margin:0 0 14px;">{info['lokasi']}</p>
-        <p style="font-size:11px;color:#9AAAC0;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px;">Wilayah yang dipantau</p>
-        <ul style="margin:0;padding-left:1.1rem;font-size:13px;color:#1E2E42;line-height:1.6;">
+        <p style="font-size:{FS['heading']};font-weight:700;color:#023E61;margin:0 0 10px;">📍 {pilihan}</p>
+        <p style="font-size:{FS['eyebrow']};color:#9AAAC0;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 4px;">Lokasi</p>
+        <p style="font-size:{FS['body']};color:#1E2E42;margin:0 0 14px;">{info['lokasi']}</p>
+        <p style="font-size:{FS['eyebrow']};color:#9AAAC0;text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px;">Wilayah yang dipantau</p>
+        <ul style="margin:0;padding-left:1.1rem;font-size:{FS['body']};color:#1E2E42;line-height:1.6;">
             {wilayah_html}
         </ul>
     """
